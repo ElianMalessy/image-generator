@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.utils as utils
 
 class VAE(nn.Module):
-    def __init__(self, latent_dim=64):
+    def __init__(self, latent_dim=32):
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Conv2d(3, 64, 4, 2, 1),

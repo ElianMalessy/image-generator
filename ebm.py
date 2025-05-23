@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.utils as utils
 
 class EBM(nn.Module):
-    def __init__(self, latent_dim=64):
+    def __init__(self, latent_dim=32):
         super().__init__()
         self.model = nn.Sequential(
             nn.Linear(latent_dim, 256),
