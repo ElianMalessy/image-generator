@@ -1,12 +1,6 @@
 import torch
-from torchvision.datasets import CelebA
-from torchvision import transforms
-from torch.utils.data import DataLoader
-from vae import VAE
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-dim_size = 32
-size = dim_size * dim_size * 3
+from models.vae import VAE
+from models import device
 
 
 def train(dataloader, num_epochs=100, patience=5):
@@ -36,8 +30,7 @@ def train(dataloader, num_epochs=100, patience=5):
                 noise = torch.randn_like(x) * 0.1
                 x_noisy = torch.clamp(x + noise, -1, 1)
 
-            z, mu, log_var = vae(x)
-            x_hat = vae.decoder(z)
+            x_hat, mu, log_var = vae(x_noisy)
 
             reconstruction_loss = torch.sum((x - x_hat)**2, dim=[1,2,3]).mean()
 
@@ -75,18 +68,4 @@ def train(dataloader, num_epochs=100, patience=5):
             break
 
         print()
-
-if __name__ == '__main__':
-    transform = transforms.Compose([
-        transforms.Resize(dim_size),
-        transforms.CenterCrop(dim_size),
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ])
-
-
-    dataset = CelebA(root="./data", split='train', transform=transform)
-    dataloader = DataLoader(dataset, batch_size=128, shuffle=True, num_workers=4)
-    train(dataloader)
-
 

@@ -1,14 +1,14 @@
 import torch
 from torchvision.utils import save_image
-from vae import VAE
-from ebm import EBM, langevin_dynamics
-
 from torchvision.datasets import CelebA
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
+from models.vae import VAE
+from models.ebm import EBM, langevin_dynamics
+from models import dim_size
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-dim_size = 32
 size = dim_size * dim_size * 3
 
 def unnormalize(tensor):
@@ -24,11 +24,12 @@ def test(vae, ebm, x0=None):
         save_image(img, 'input.png')
 
 
-    x0 = x0.view(1, 3, 32, 32)
+    x0 = x0.view(1, 3, dim_size, dim_size)
 
-    z, _, _ = vae(x0)
-    z_prime = langevin_dynamics(z, ebm)
-    x_hat = vae.decoder(z_prime)
+    mu, logvar = vae.encode(x0)
+    z = vae.reparameterize(mu, logvar)
+    # z_prime = langevin_dynamics(z, ebm)
+    x_hat = vae.decoder(z)
 
     img = unnormalize(x_hat.cpu())
     save_image(img, 'output.png')
@@ -41,9 +42,9 @@ if __name__ == '__main__':
     vae.eval()
 
     ebm = EBM()
-    ebm.load_state_dict(torch.load("ebm_model.pth"))
-    ebm = ebm.to(device)
-    ebm.eval()
+    # ebm.load_state_dict(torch.load("ebm_model.pth"))
+    # ebm = ebm.to(device)
+    # ebm.eval()
 
     # transform = transforms.Compose([
     #     transforms.Resize(dim_size),

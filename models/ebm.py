@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.utils as utils
 
+
 class EBM(nn.Module):
     def __init__(self, latent_dim=64):
         super().__init__()
