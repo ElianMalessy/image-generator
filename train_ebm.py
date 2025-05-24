@@ -2,7 +2,6 @@ import torch
 from torchvision.datasets import CelebA
 from torchvision import transforms
 from torch.utils.data import DataLoader
-from torch.utils.data import Subset
 
 from vae import VAE
 from ebm import EBM, langevin_dynamics
@@ -24,12 +23,12 @@ def train(dataloader, vae, num_epochs=20):
             optimizer.zero_grad()
 
             with torch.no_grad():
-                z = vae(x)
+                z, _, _ = vae(x)
 
             x0 = torch.randn_like(images).to(device)
             
             with torch.no_grad():
-                z0 = vae(x0)
+                z0, _, _ = vae(x0)
 
             z_star = langevin_dynamics(z0, ebm)
 
@@ -57,9 +56,6 @@ if __name__ == '__main__':
     ])
 
     dataset = CelebA(root="./data", split='train', transform=transform)
-
-    subset_indices = list(range(20000))
-    dataset = Subset(dataset, subset_indices)
 
     dataloader = DataLoader(dataset, batch_size=64, shuffle=True, num_workers=4)
     train(dataloader, vae)
