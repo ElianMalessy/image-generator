@@ -29,20 +29,19 @@ class VAE(nn.Module):
             nn.Conv2d(256, 512, 4, 2, 1),
             nn.BatchNorm2d(512),
             nn.SiLU(),
-            nn.Flatten()
         )
 
-        # self.attention = MultiHeadSelfAttention(embed_dim=512, num_heads=8)
-        # self.avgpool = nn.AdaptiveAvgPool2d(1)
-        # self.mu_conv = nn.Conv2d(512, latent_dim, 1)
-        # self.log_var_conv = nn.Conv2d(512, latent_dim, 1)
+        self.attention = MultiHeadSelfAttention(embed_dim=512, num_heads=8)
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
+        self.mu_conv = nn.Conv2d(512, latent_dim, 1)
+        self.log_var_conv = nn.Conv2d(512, latent_dim, 1)
 
-        self.mu = nn.Linear(512 * 2 * 2, latent_dim)
-        self.log_var = nn.Linear(512 * 2 * 2, latent_dim)
+        # self.mu = nn.Linear(512 * 2 * 2, latent_dim)
+        # self.log_var = nn.Linear(512 * 2 * 2, latent_dim)
 
         self.decoder = nn.Sequential(
-            nn.Linear(latent_dim, 512 * 2 * 2),
-            nn.Unflatten(1, (512, 2, 2)),
+            nn.Linear(latent_dim, 512 * 4 * 4),
+            nn.Unflatten(1, (512, 4, 4)),
             nn.ConvTranspose2d(512, 256, 4, 2, 1),
             nn.SiLU(),
             nn.ConvTranspose2d(256, 128, 4, 2, 1),
@@ -55,16 +54,15 @@ class VAE(nn.Module):
 
     def encode(self, x):
         x = self.encoder(x)
-        # x = self.attention(x)
-        # x = self.avgpool(x)
-        # mu = self.mu_conv(x).squeeze(-1).squeeze(-1)
-        # log_var = self.log_var_conv(x).squeeze(-1).squeeze(-1)
-        mu = self.mu(x)
-        log_var = self.log_var(x)
+        x = self.attention(x)
+        x = self.avgpool(x)
+        mu = self.mu_conv(x).squeeze(-1).squeeze(-1)
+        log_var = self.log_var_conv(x).squeeze(-1).squeeze(-1)
+        # mu = self.mu(x)
+        # log_var = self.log_var(x)
         return mu, log_var
 
 
-    
     def reparameterize(self, mu, log_var):
         std = torch.exp(0.5 * log_var)
         eps = torch.randn_like(std)

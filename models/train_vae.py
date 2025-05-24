@@ -1,5 +1,6 @@
 import torch
 from models.vae import VAE
+# from models.v import VAE
 from models import device
 
 
@@ -35,7 +36,7 @@ def train(dataloader, num_epochs=100, patience=5):
             reconstruction_loss = torch.sum((x - x_hat)**2, dim=[1,2,3]).mean()
 
             ratio = global_step / warmup_steps
-            beta = min(0.2, ratio)
+            beta = min(0.8, ratio)
             free_nats = max(1.0 - ratio, 0.2)
 
             kl_per_dim = 0.5 * (mu**2) + torch.exp(log_var) - log_var - 1
@@ -47,7 +48,7 @@ def train(dataloader, num_epochs=100, patience=5):
             ELBO.backward()
             optimizer.step()
 
-            epoch_elbo += ELBO.item()
+            epoch_elbo += ELBO.item() / 128
             global_step += 1
 
         avg_elbo = epoch_elbo / num_batches

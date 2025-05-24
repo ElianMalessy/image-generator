@@ -32,7 +32,7 @@ def test(vae, ebm, x0=None):
     x_hat = vae.decoder(z)
 
     img = unnormalize(x_hat.cpu())
-    save_image(img, 'output.png')
+    save_image(img, 'output1.png')
 
 
 if __name__ == '__main__':
