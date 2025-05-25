@@ -1,5 +1,4 @@
 data/**
-vae_model.pth
-ebm_model.pth
+*.pth
 *.png
 __pycache__/

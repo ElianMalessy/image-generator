@@ -1,6 +1,5 @@
 import torch
 from models.vae import VAE
-# from models.v import VAE
 from models import device
 
 
@@ -14,7 +13,7 @@ def train(dataloader, num_epochs=100, patience=5):
 
     total_steps = num_epochs * num_batches
     global_step = 0
-    warmup_steps = int(0.5 * total_steps)
+    warmup_steps = int(0.2 * total_steps)
 
     best_elbo = float('inf')
     epochs_no_improve = 0
@@ -22,9 +21,12 @@ def train(dataloader, num_epochs=100, patience=5):
     for epoch in range(num_epochs):
         print(f'Epoch {epoch+1}/{num_epochs}')
         epoch_elbo = 0.0
+        epoch_reconstruction = 0.0
+        epoch_kl = 0.0
 
         for images, _ in dataloader:
             x = images.to(device)
+            B = x.size(0)
             optimizer.zero_grad()
 
             with torch.no_grad():
@@ -36,25 +38,30 @@ def train(dataloader, num_epochs=100, patience=5):
             reconstruction_loss = torch.sum((x - x_hat)**2, dim=[1,2,3]).mean()
 
             ratio = global_step / warmup_steps
-            beta = min(0.8, ratio)
-            free_nats = max(1.0 - ratio, 0.2)
+            beta = min(1.0, ratio)
+            free_nats = max(1.0 - ratio, 0.1)
 
             kl_per_dim = 0.5 * (mu**2) + torch.exp(log_var) - log_var - 1
             kl_per_dim = torch.clamp(kl_per_dim - free_nats, min=0.0)
             kl_div = torch.sum(kl_per_dim, dim=1).mean() 
             ELBO = reconstruction_loss + beta * kl_div
 
-            print(f"Reconstruction loss: {reconstruction_loss.item() / 128} KL loss:, {beta * kl_div.item() / 128}")
             ELBO.backward()
             optimizer.step()
 
-            epoch_elbo += ELBO.item() / 128
+            epoch_elbo += ELBO.item() / B
+            epoch_reconstruction += reconstruction_loss.item() / B
+            epoch_reconstruction += kl_div.item() / B
             global_step += 1
 
         avg_elbo = epoch_elbo / num_batches
+        avg_reconstruction = epoch_reconstruction / num_batches
+        avg_kl = epoch_kl / num_batches
+
+        print(f"Average reconstruction loss: {avg_reconstruction:.4f}")
+        print(f"Average KL loss:, {avg_kl:.4f}")
         print(f"Average ELBO: {avg_elbo:.4f}")
 
-        # Early stopping logic:
         if avg_elbo < best_elbo:
             best_elbo = avg_elbo
             epochs_no_improve = 0

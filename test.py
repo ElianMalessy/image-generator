@@ -5,34 +5,36 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 
 from models.vae import VAE
-from models.ebm import EBM, langevin_dynamics
+from models.flow import Flow
+# from models.ebm import EBM, langevin_dynamics
 from models import dim_size
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-size = dim_size * dim_size * 3
 
 def unnormalize(tensor):
     mean = torch.tensor([0.5, 0.5, 0.5]).view(-1, 1, 1)
     std = torch.tensor([0.5, 0.5, 0.5]).view(-1, 1, 1)
     return tensor * std + mean
 
-def test(vae, ebm, x0=None):
-    if x0 is None:
-        x0 = torch.randn(1, dim_size*dim_size*3).to(device)
+def test(vae, flow, x0=None):
+    if x0 is not None:
+        x0 = x0.view(1, 3, dim_size, dim_size)
+
+        mu, logvar = vae.encode(x0)
+        z = vae.reparameterize(mu, logvar)
     else:
-        img = unnormalize(x0.cpu())
-        save_image(img, 'input.png')
+        z = torch.randn(1, 64).to(device)
 
 
-    x0 = x0.view(1, 3, dim_size, dim_size)
+    x_hat = vae.decoder(z)
+    img = unnormalize(x_hat.cpu())
+    save_image(img, 'output1.png')
 
-    mu, logvar = vae.encode(x0)
-    z = vae.reparameterize(mu, logvar)
-    # z_prime = langevin_dynamics(z, ebm)
+    z = flow.transform(z)
     x_hat = vae.decoder(z)
 
     img = unnormalize(x_hat.cpu())
-    save_image(img, 'output1.png')
+    save_image(img, 'output2.png')
 
 
 if __name__ == '__main__':
@@ -41,7 +43,12 @@ if __name__ == '__main__':
     vae = vae.to(device)
     vae.eval()
 
-    ebm = EBM()
+    flow = Flow()
+    flow.load_state_dict(torch.load("flow_model.pth"))
+    flow = flow.to(device)
+    flow.eval()
+
+    # ebm = EBM()
     # ebm.load_state_dict(torch.load("ebm_model.pth"))
     # ebm = ebm.to(device)
     # ebm.eval()
@@ -56,5 +63,5 @@ if __name__ == '__main__':
     # x0 = dataset[0][0].to(device)
 
 
-    # test(vae, ebm, x0)
-    test(vae, ebm)
+    # test(vae, flow, x0)
+    test(vae, flow)

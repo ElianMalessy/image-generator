@@ -16,6 +16,8 @@ class MultiHeadSelfAttention(nn.Module):
 class VAE(nn.Module):
     def __init__(self, latent_dim=64):
         super().__init__()
+        self.latent_dim = latent_dim
+
         self.encoder = nn.Sequential(
             nn.Conv2d(3, 64, 4, 2, 1),
             nn.BatchNorm2d(64),
@@ -33,11 +35,12 @@ class VAE(nn.Module):
 
         self.attention = MultiHeadSelfAttention(embed_dim=512, num_heads=8)
         self.avgpool = nn.AdaptiveAvgPool2d(1)
+
         self.mu_conv = nn.Conv2d(512, latent_dim, 1)
         self.log_var_conv = nn.Conv2d(512, latent_dim, 1)
 
-        # self.mu = nn.Linear(512 * 2 * 2, latent_dim)
-        # self.log_var = nn.Linear(512 * 2 * 2, latent_dim)
+        # self.mu = nn.Linear(512, latent_dim)
+        # self.log_var = nn.Linear(512, latent_dim)
 
         self.decoder = nn.Sequential(
             nn.Linear(latent_dim, 512 * 4 * 4),
@@ -56,10 +59,12 @@ class VAE(nn.Module):
         x = self.encoder(x)
         x = self.attention(x)
         x = self.avgpool(x)
+
         mu = self.mu_conv(x).squeeze(-1).squeeze(-1)
         log_var = self.log_var_conv(x).squeeze(-1).squeeze(-1)
         # mu = self.mu(x)
         # log_var = self.log_var(x)
+
         return mu, log_var
 
 
