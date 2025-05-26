@@ -23,18 +23,19 @@ def test(vae, flow, x0=None):
         mu, logvar = vae.encode(x0)
         z = vae.reparameterize(mu, logvar)
     else:
-        z = torch.randn(1, 64).to(device)
+        z = torch.randn(1, 64, 4, 4).to(device)
 
 
-    x_hat = vae.decoder(z)
+
+    x_hat = vae.decode(z)
     img = unnormalize(x_hat.cpu())
     save_image(img, 'output1.png')
 
-    z = flow.transform(z)
-    x_hat = vae.decoder(z)
-
-    img = unnormalize(x_hat.cpu())
-    save_image(img, 'output2.png')
+    # z = flow.transform(z)
+    # x_hat = vae.decoder(z)
+    #
+    # img = unnormalize(x_hat.cpu())
+    # save_image(img, 'output2.png')
 
 
 if __name__ == '__main__':
@@ -59,7 +60,7 @@ if __name__ == '__main__':
     #     transforms.ToTensor(),
     #     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     # ])
-    # dataset = CelebA(root="./data", split='test', transform=transform)
+    # dataset = CelebA(root="./data", split='train', transform=transform)
     # x0 = dataset[0][0].to(device)
 
 

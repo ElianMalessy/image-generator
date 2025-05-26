@@ -1,6 +1,24 @@
 import torch
 import torch.nn as nn
 
+class ResidualBlock(nn.Module):
+    def __init__(self, block):
+        super().__init__()
+        self.block = block
+
+    def forward(self, x):
+        return x + self.block(x)
+
+class ConvolutionalPositionalEncoding(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.dwconv = nn.Conv2d(channels, channels, kernel_size=3, padding=1, groups=channels)
+
+    def forward(self, x):
+        x = x + self.dwconv(x)
+        return x
+
+
 class MultiHeadSelfAttention(nn.Module):
     def __init__(self, embed_dim, num_heads):
         super().__init__()
@@ -33,18 +51,36 @@ class VAE(nn.Module):
             nn.SiLU(),
         )
 
-        self.attention = MultiHeadSelfAttention(embed_dim=512, num_heads=8)
-        self.avgpool = nn.AdaptiveAvgPool2d(1)
+        self.encoder_attention = nn.Sequential (
+            ResidualBlock(
+                nn.Sequential(
+                    ConvolutionalPositionalEncoding(channels=512),
+                    MultiHeadSelfAttention(embed_dim=512, num_heads=8)
+                )
+            ),
 
-        self.mu_conv = nn.Conv2d(512, latent_dim, 1)
-        self.log_var_conv = nn.Conv2d(512, latent_dim, 1)
+            nn.BatchNorm2d(512),
+            nn.SiLU()
+        )
 
-        # self.mu = nn.Linear(512, latent_dim)
-        # self.log_var = nn.Linear(512, latent_dim)
+        # spatial latents
+        self.mu = nn.Conv2d(512, latent_dim, kernel_size=1)
+        self.log_var = nn.Conv2d(512, latent_dim, kernel_size=1)
+
+        self.decoder_attention = nn.Sequential(
+            nn.ConvTranspose2d(latent_dim, 512, kernel_size=1),
+            ResidualBlock(
+                nn.Sequential(
+                    ConvolutionalPositionalEncoding(channels=512),
+                    MultiHeadSelfAttention(embed_dim=512, num_heads=8)
+                )
+            ),
+
+            nn.BatchNorm2d(512),
+            nn.SiLU()
+        )
 
         self.decoder = nn.Sequential(
-            nn.Linear(latent_dim, 512 * 4 * 4),
-            nn.Unflatten(1, (512, 4, 4)),
             nn.ConvTranspose2d(512, 256, 4, 2, 1),
             nn.SiLU(),
             nn.ConvTranspose2d(256, 128, 4, 2, 1),
@@ -57,13 +93,10 @@ class VAE(nn.Module):
 
     def encode(self, x):
         x = self.encoder(x)
-        x = self.attention(x)
-        x = self.avgpool(x)
+        x = self.encoder_attention(x)
 
-        mu = self.mu_conv(x).squeeze(-1).squeeze(-1)
-        log_var = self.log_var_conv(x).squeeze(-1).squeeze(-1)
-        # mu = self.mu(x)
-        # log_var = self.log_var(x)
+        mu = self.mu(x)
+        log_var = self.log_var(x)
 
         return mu, log_var
 
@@ -74,6 +107,7 @@ class VAE(nn.Module):
         return mu + eps * std
     
     def decode(self, z):
+        z = self.decoder_attention(z)
         return self.decoder(z)
     
     def forward(self, x):

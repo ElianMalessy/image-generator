@@ -24,7 +24,7 @@ if __name__ == '__main__':
     ])
 
 
-    dataset = CelebA(root="./data", split='train', transform=transform)
+    dataset = CelebA(root="./data", transform=transform)
     dataloader = DataLoader(dataset, batch_size=128, shuffle=True, num_workers=4)
 
     if parser.parse_args().vae:
