@@ -5,9 +5,10 @@ class ResidualBlock(nn.Module):
     def __init__(self, block):
         super().__init__()
         self.block = block
+        self.alpha = nn.Parameter(torch.tensor(0.0))
 
     def forward(self, x):
-        return x + self.block(x)
+        return x + self.alpha * self.block(x)
 
 class ConvolutionalPositionalEncoding(nn.Module):
     def __init__(self, channels):
@@ -22,7 +23,7 @@ class ConvolutionalPositionalEncoding(nn.Module):
 class MultiHeadSelfAttention(nn.Module):
     def __init__(self, embed_dim, num_heads):
         super().__init__()
-        self.mha = nn.MultiheadAttention(embed_dim, num_heads)
+        self.mha = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
     
     def forward(self, x):
         B, C, H, W = x.shape
@@ -30,6 +31,7 @@ class MultiHeadSelfAttention(nn.Module):
         attn_output, _ = self.mha(x_flat, x_flat, x_flat)  # (B, H*W, C)
         x = attn_output.permute(0, 2, 1).view(B, C, H, W)
         return x
+
 
 class VAE(nn.Module):
     def __init__(self, latent_dim=64):
@@ -63,9 +65,11 @@ class VAE(nn.Module):
             nn.SiLU()
         )
 
+
         # spatial latents
         self.mu = nn.Conv2d(512, latent_dim, kernel_size=1)
         self.log_var = nn.Conv2d(512, latent_dim, kernel_size=1)
+
 
         self.decoder_attention = nn.Sequential(
             nn.ConvTranspose2d(latent_dim, 512, kernel_size=1),
@@ -75,8 +79,6 @@ class VAE(nn.Module):
                     MultiHeadSelfAttention(embed_dim=512, num_heads=8)
                 )
             ),
-
-            nn.BatchNorm2d(512),
             nn.SiLU()
         )
 

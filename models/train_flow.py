@@ -27,7 +27,7 @@ def train(dataloader, vae, num_epochs=100, patience=5):
                 z0 = torch.randn_like(z, device=device)
 
 
-            t = torch.rand(B, device=device).unsqueeze(-1)
+            t = torch.rand(B, device=device).view(B, 1, 1, 1)
             z_interpolated = (1-t)*z0 + (t*z)
             v_hat = flow(z_interpolated, t)
             v = z - z0
@@ -40,7 +40,7 @@ def train(dataloader, vae, num_epochs=100, patience=5):
 
 
         avg_loss = epoch_loss / num_batches
-        print(f"Average loss: {avg_loss:.4f}")
+        print(f"Average loss: {avg_loss}")
 
         if avg_loss < best_loss:
             best_loss = avg_loss

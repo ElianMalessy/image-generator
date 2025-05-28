@@ -36,13 +36,11 @@ def train(dataloader, num_epochs=100, patience=5):
             x_hat, mu, log_var = vae(x_noisy)
 
             reconstruction_loss = torch.sum((x - x_hat)**2, dim=[1,2,3]).mean()
-            kl_per_dim = 0.5 * (mu**2) + torch.exp(log_var) - log_var - 1
+            kl_per_dim = 0.5 * (mu.pow(2) + torch.exp(log_var) - log_var - 1)
 
             ratio = global_step / warmup_steps
-            beta = min(1.0, ratio)
-            # free_nats = max(1.0 - ratio, 0.2)
+            beta = min(2.0, ratio)
 
-            # kl_per_dim = torch.clamp(kl_per_dim - free_nats, min=0.0)
             kl_div = beta * torch.sum(kl_per_dim, dim=1).mean() 
             ELBO = reconstruction_loss + kl_div
 

@@ -26,14 +26,13 @@ def test(vae, flow, x0=None):
         z = torch.randn(1, 64, 4, 4).to(device)
 
 
-
     x_hat = vae.decode(z)
     img = unnormalize(x_hat.cpu())
     save_image(img, 'output1.png')
 
     # z = flow.transform(z)
-    # x_hat = vae.decoder(z)
-    #
+    # x_hat = vae.decode(z)
+
     # img = unnormalize(x_hat.cpu())
     # save_image(img, 'output2.png')
 
@@ -62,7 +61,7 @@ if __name__ == '__main__':
     # ])
     # dataset = CelebA(root="./data", split='train', transform=transform)
     # x0 = dataset[0][0].to(device)
-
-
+    #
+    #
     # test(vae, flow, x0)
     test(vae, flow)
