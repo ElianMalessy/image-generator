@@ -52,18 +52,6 @@ class MultiHeadSelfAttention(nn.Module):
             x_out = attn_output.permute(0, 2, 1).view(B, C, H, W)
             return x_out, None
 
-class ConvAttention(nn.Module):
-    def __init__(self, channels, num_heads):
-        super().__init__()
-        self.pe = DepthwiseEncoding(channels)
-
-        self.attn = MultiHeadSelfAttention(embed_dim=channels, num_heads=num_heads)
-
-    def forward(self, x):
-        x = self.pe(x)
-        x = self.attn(x)
-        return x
-
 class ViT(nn.Module):
     def __init__(self, channels, dim, heads, mlp_mult=4, dropout=0.1):
         super().__init__()
@@ -99,6 +87,15 @@ class ViT(nn.Module):
         else:
             return x, updated_global_token
 
+class UpsampleConv(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1)
+        )
+    def forward(self, x):
+        return self.block(x)
 
 class VAE(nn.Module):
     def __init__(self, latent_dim=(4, 16, 16)):
@@ -120,9 +117,7 @@ class VAE(nn.Module):
         self.log_var = nn.Conv2d(128, C, kernel_size=1)
 
         self.global_token = nn.Parameter(torch.zeros(1, 1, C))  # shared global token
-
         self.latent_attention = nn.ModuleList([
-            ViT(C, H, heads=4, mlp_mult=4, dropout=0.1),
             ViT(C, H, heads=4, mlp_mult=4, dropout=0.1),
             ViT(C, H, heads=4, mlp_mult=4, dropout=0.1),
             ViT(C, H, heads=4, mlp_mult=4, dropout=0.1),
@@ -131,14 +126,12 @@ class VAE(nn.Module):
 
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(C, 128, kernel_size=1),
-            ViT(128, H, heads=4, mlp_mult=4, dropout=0.1),
             nn.SiLU(),
 
-            nn.ConvTranspose2d(128, 64, 3, 2, 1, 1),
-            ViT(64, H*2, heads=4, mlp_mult=4, dropout=0.1),
+            UpsampleConv(128, 64),
             nn.SiLU(),
 
-            nn.ConvTranspose2d(64, 3, 3, 2, 1, 1),
+            UpsampleConv(64, 3),
             nn.Tanh(),  # Keep output in [-1,1]
         )
 
@@ -146,7 +139,7 @@ class VAE(nn.Module):
         x = self.encoder(x)
 
         mu = self.mu(x)
-        log_var = self.log_var(x).clamp(-10.0, 10.0)
+        log_var = self.log_var(x)
 
         return mu, log_var
 

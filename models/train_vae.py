@@ -32,11 +32,10 @@ def train(dataloader, num_epochs=100, patience=5):
             x_hat, mu, log_var = vae(x_noisy)
 
             reconstruction_loss = torch.sum((x - x_hat)**2, dim=[1,2,3]).mean()
-            kl_per_sample = torch.sum(0.5 * (mu.pow(2) + torch.exp(log_var) - log_var - 1), dim=[1,2,3])
-
-            free_nats = 512.0
-            kl_excess = torch.clamp(kl_per_sample - free_nats, min=0.0)
-            kl_div = kl_excess.mean()
+            kl_per_dim = 0.5 * (mu.pow(2) + torch.exp(log_var) - log_var - 1)
+            psi = 0.5
+            kl_excess_per_dim = torch.clamp(kl_per_dim - psi, min=0.0)
+            kl_div = kl_excess_per_dim.sum(dim=[1,2,3]).mean()
 
             ELBO = reconstruction_loss + kl_div
             ELBO.backward()
@@ -45,7 +44,6 @@ def train(dataloader, num_epochs=100, patience=5):
             epoch_elbo += ELBO.item() / B
             epoch_reconstruction += reconstruction_loss.item() / B
             epoch_kl += kl_div.item() / B
-            # global_step += 1
 
         avg_elbo = epoch_elbo / num_batches
         avg_reconstruction = epoch_reconstruction / num_batches
