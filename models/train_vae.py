@@ -11,9 +11,9 @@ def train(dataloader, num_epochs=100, patience=5):
 
     num_batches = len(dataloader)
 
-    total_steps = num_epochs * num_batches
-    global_step = 0
-    warmup_steps = int(0.1 * total_steps)
+    # total_steps = num_epochs * num_batches
+    # global_step = 0
+    # warmup_steps = int(0.1 * total_steps)
 
     best_elbo = float('inf')
     epochs_no_improve = 0
@@ -36,21 +36,23 @@ def train(dataloader, num_epochs=100, patience=5):
             x_hat, mu, log_var = vae(x_noisy)
 
             reconstruction_loss = torch.sum((x - x_hat)**2, dim=[1,2,3]).mean()
-            kl_per_dim = 0.5 * (mu.pow(2) + torch.exp(log_var) - log_var - 1)
+            kl_per_sample = torch.sum(0.5 * (mu.pow(2) + torch.exp(log_var) - log_var - 1), dim=[1,2,3])
 
-            ratio = global_step / warmup_steps
-            beta = min(2.0, ratio)
+            free_nats = 2.0
+            kl_div = torch.clamp(kl_per_sample, min=free_nats).mean()
 
-            kl_div = beta * torch.sum(kl_per_dim, dim=1).mean() 
+            # ratio = global_step / warmup_steps
+            # beta = min(1.5, ratio)
+            # kl_div = torch.sum(kl_per_dim, dim=1).mean() 
+
             ELBO = reconstruction_loss + kl_div
-
             ELBO.backward()
             optimizer.step()
 
             epoch_elbo += ELBO.item() / B
             epoch_reconstruction += reconstruction_loss.item() / B
             epoch_kl += kl_div.item() / B
-            global_step += 1
+            # global_step += 1
 
         avg_elbo = epoch_elbo / num_batches
         avg_reconstruction = epoch_reconstruction / num_batches

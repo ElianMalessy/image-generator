@@ -25,7 +25,7 @@ class Flow(nn.Module):
         return self.mlp(x_aug)
 
 
-    def transform(self, x: torch.Tensor, steps=30):
+    def transform(self, x: torch.Tensor, steps=20):
         t = torch.linspace(0, 1, steps=steps).to(device)
 
         def dxdt(ti, xi) -> torch.Tensor:
