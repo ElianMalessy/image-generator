@@ -11,10 +11,6 @@ def train(dataloader, num_epochs=100, patience=5):
 
     num_batches = len(dataloader)
 
-    # total_steps = num_epochs * num_batches
-    # global_step = 0
-    # warmup_steps = int(0.1 * total_steps)
-
     best_elbo = float('inf')
     epochs_no_improve = 0
 
@@ -38,12 +34,9 @@ def train(dataloader, num_epochs=100, patience=5):
             reconstruction_loss = torch.sum((x - x_hat)**2, dim=[1,2,3]).mean()
             kl_per_sample = torch.sum(0.5 * (mu.pow(2) + torch.exp(log_var) - log_var - 1), dim=[1,2,3])
 
-            free_nats = 2.0
-            kl_div = torch.clamp(kl_per_sample, min=free_nats).mean()
-
-            # ratio = global_step / warmup_steps
-            # beta = min(1.5, ratio)
-            # kl_div = torch.sum(kl_per_dim, dim=1).mean() 
+            free_nats = 512.0
+            kl_excess = torch.clamp(kl_per_sample - free_nats, min=0.0)
+            kl_div = kl_excess.mean()
 
             ELBO = reconstruction_loss + kl_div
             ELBO.backward()

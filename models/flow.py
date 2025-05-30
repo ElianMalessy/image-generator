@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from models import device
 from torchdiffeq import odeint
+# from modelvae import ViT
 
 class Flow(nn.Module):
     def __init__(self, in_channels=64, time_dim=16):

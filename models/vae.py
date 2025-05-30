@@ -50,7 +50,7 @@ class MultiHeadSelfAttention(nn.Module):
             return x_out, updated_global_token
         else:
             x_out = attn_output.permute(0, 2, 1).view(B, C, H, W)
-            return x_out
+            return x_out, None
 
 class ConvAttention(nn.Module):
     def __init__(self, channels, num_heads):
@@ -85,20 +85,23 @@ class ViT(nn.Module):
         self.drop2 = nn.Dropout(dropout)
         self.res = ResidualBlock(nn.Sequential(self.norm2, self.mlp, self.drop2))
 
-    def forward(self, x, global_token):
+    def forward(self, x, global_token=None):
         x = self.pe(x)
 
         residual = x
         x_norm = self.norm1(x)
         attn_out, updated_global_token = self.attn(x_norm, global_token)
         x = residual + self.drop1(attn_out)
-
         x = self.res(x)
-        return x, updated_global_token
+
+        if global_token is None:
+            return x
+        else:
+            return x, updated_global_token
 
 
 class VAE(nn.Module):
-    def __init__(self, latent_dim=64):
+    def __init__(self, latent_dim=(4, 16, 16)):
         super().__init__()
         self.latent_dim = latent_dim
         self.encoder = nn.Sequential(
@@ -108,60 +111,32 @@ class VAE(nn.Module):
             nn.Conv2d(64, 128, 3, 2, 1),
             nn.BatchNorm2d(128),
             nn.SiLU(),
-            nn.Conv2d(128, 256, 3, 2, 1),
-            nn.BatchNorm2d(256),
-            nn.SiLU(),
-            nn.Conv2d(256, 512, 3, 2, 1),
-            nn.BatchNorm2d(512),
-            nn.SiLU(),
-            ResidualBlock(ConvAttention(512, 4)),
-            nn.BatchNorm2d(512),
-            nn.SiLU()
         )
-
+        
+        C, H, W = latent_dim
 
         # spatial latents
-        self.mu = nn.Conv2d(512, latent_dim, kernel_size=1)
-        self.log_var = nn.Conv2d(512, latent_dim, kernel_size=1)
+        self.mu = nn.Conv2d(128, C, kernel_size=1)
+        self.log_var = nn.Conv2d(128, C, kernel_size=1)
 
-        self.global_token = nn.Parameter(torch.zeros(1, 1, latent_dim))  # shared global token
+        self.global_token = nn.Parameter(torch.zeros(1, 1, C))  # shared global token
 
         self.latent_attention = nn.ModuleList([
-            ViT(latent_dim, 4, heads=8, mlp_mult=4, dropout=0.1),
-            ViT(latent_dim, 4, heads=8, mlp_mult=4, dropout=0.1),
-            ViT(latent_dim, 4, heads=8, mlp_mult=4, dropout=0.1),
-            ViT(latent_dim, 4, heads=8, mlp_mult=4, dropout=0.1),
+            ViT(C, H, heads=4, mlp_mult=4, dropout=0.1),
+            ViT(C, H, heads=4, mlp_mult=4, dropout=0.1),
+            ViT(C, H, heads=4, mlp_mult=4, dropout=0.1),
+            ViT(C, H, heads=4, mlp_mult=4, dropout=0.1),
         ])
 
 
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(latent_dim, 512, kernel_size=1),
+            nn.ConvTranspose2d(C, 128, kernel_size=1),
+            ViT(128, H, heads=4, mlp_mult=4, dropout=0.1),
             nn.SiLU(),
-
-            ResidualBlock(ConvAttention(512, 4)),
-            nn.BatchNorm2d(512),
-            nn.SiLU(),
-
-            nn.ConvTranspose2d(512, 256, 3, 2, 1, 1),
-            nn.SiLU(),
-
-            ResidualBlock(ConvAttention(256, 4)),
-            nn.BatchNorm2d(256),
-            nn.SiLU(),
-
-            nn.ConvTranspose2d(256, 128, 3, 2, 1, 1),
-            nn.SiLU(),
-
-            # ResidualBlock(AttentionWithPE(128, 4, 4, False)),
-            # nn.BatchNorm2d(128),
-            # nn.SiLU(),
 
             nn.ConvTranspose2d(128, 64, 3, 2, 1, 1),
+            ViT(64, H*2, heads=4, mlp_mult=4, dropout=0.1),
             nn.SiLU(),
-
-            # ResidualBlock(AttentionWithPE(64, 4, 4, False)),
-            # nn.BatchNorm2d(64),
-            # nn.SiLU(),
 
             nn.ConvTranspose2d(64, 3, 3, 2, 1, 1),
             nn.Tanh(),  # Keep output in [-1,1]
