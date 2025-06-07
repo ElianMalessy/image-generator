@@ -30,7 +30,7 @@ def test(vae, flow=None, x0=None):
         mu, logvar = vae.encode(x0)
         z = vae.reparameterize(mu, logvar)
     else:
-        z = torch.randn(1, 4, 16, 16).to(device)
+        z = torch.randn(1, 16, 16, 16).to(device)
 
 
     x_hat = vae.decode(z)
