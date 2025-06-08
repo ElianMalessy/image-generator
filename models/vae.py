@@ -1,42 +1,8 @@
 import torch
 import torch.nn as nn
 
-import torch.nn.functional as F
-
-class VectorQuantizer(nn.Module):
-    def __init__(self, num_embeddings, embedding_dim, commitment_cost):
-        super().__init__()
-        self.embedding_dim = embedding_dim
-        self.num_embeddings = num_embeddings
-        self.commitment_cost = commitment_cost
-
-        self.embeddings = nn.Parameter(torch.randn(num_embeddings, embedding_dim))
-
-    def forward(self, z_e):
-        # Input shape: [B, D, H, W] → [BHW, D]
-        B, D, H, W = z_e.shape
-        z_flattened = z_e.permute(0, 2, 3, 1).contiguous().view(-1, D)
-
-        # Compute L2 distance to each codebook vector
-        distances = (
-            torch.sum(z_flattened ** 2, dim=1, keepdim=True)
-            - 2 * z_flattened @ self.embeddings.t()
-            + torch.sum(self.embeddings ** 2, dim=1)
-        )  # [BHW, K]
-
-        encoding_indices = torch.argmin(distances, dim=1)
-        z_q = self.embeddings[encoding_indices].view(B, H, W, D).permute(0, 3, 1, 2)
-
-        # Codebook + commitment loss
-        loss = F.mse_loss(z_q.detach(), z_e) + self.commitment_cost * F.mse_loss(z_q, z_e.detach())
-
-        # Straight-through gradient estimator
-        z_q = z_e + (z_q - z_e).detach()
-
-        return z_q, loss
-
 class VAE(nn.Module):
-    def __init__(self, embedding_dim=64, num_embeddings=512, commitment_cost=0.25):
+    def __init__(self, latent_dim=64):
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Conv2d(3, 64, 4, 2, 1),
@@ -45,31 +11,47 @@ class VAE(nn.Module):
             nn.Conv2d(64, 128, 4, 2, 1),
             nn.BatchNorm2d(128),
             nn.SiLU(),
-            nn.Conv2d(128, embedding_dim, 4, 2, 1),  # → [B, D, H, W]
+            nn.Conv2d(128, 256, 4, 2, 1),
+            nn.BatchNorm2d(256),
+            nn.SiLU(),
+            nn.Conv2d(256, 512, 4, 2, 1),
+            nn.BatchNorm2d(512),
+            nn.SiLU(),
+            nn.Flatten()
         )
 
-        self.vq = VectorQuantizer(num_embeddings, embedding_dim, commitment_cost)
+        self.mu = nn.Linear(512 * 4 * 4, latent_dim)
+        self.log_var = nn.Linear(512 * 4 * 4, latent_dim)
 
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(embedding_dim, 128, 4, 2, 1),
+            nn.Linear(latent_dim, 512 * 4 * 4),
+            nn.Unflatten(1, (512, 4, 4)),
+            nn.ConvTranspose2d(512, 256, 4, 2, 1),
+            nn.SiLU(),
+            nn.ConvTranspose2d(256, 128, 4, 2, 1),
             nn.SiLU(),
             nn.ConvTranspose2d(128, 64, 4, 2, 1),
             nn.SiLU(),
             nn.ConvTranspose2d(64, 3, 4, 2, 1),
-            nn.Tanh()
+            nn.Tanh(),  # Keep output in [-1,1]
         )
 
     def encode(self, x):
-        z_e = self.encoder(x)
-        z_q, vq_loss = self.vq(z_e) 
+        x = self.encoder(x)
+        mu = self.mu(x)
+        log_var = self.log_var(x)
+        return mu, log_var
 
-        return z_q, vq_loss
-
+    def reparameterize(self, mu, log_var):
+        std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+    
     def decode(self, z):
         return self.decoder(z)
     
     def forward(self, x):
-        z_q, vq_loss = self.encode(x)
-        reconstruction = self.decode(z_q)
-        return reconstruction, vq_loss
-
+        mu, log_var = self.encode(x)
+        z = self.reparameterize(mu, log_var)
+        reconstruction = self.decode(z)
+        return reconstruction, mu, log_var

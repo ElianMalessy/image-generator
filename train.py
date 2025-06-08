@@ -34,5 +34,5 @@ if __name__ == '__main__':
         vae.load_state_dict(torch.load("vae_model.pth"))
         vae = vae.to(device)
         vae.eval()
-        vae = torch.compile(vae)
+        vae = torch.compile(vae, mode='max-autotune')
         train_flow(dataloader, vae)

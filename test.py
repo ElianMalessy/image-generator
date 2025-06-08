@@ -23,6 +23,15 @@ def unnormalize(tensor):
     std = torch.tensor([0.5, 0.5, 0.5]).view(-1, 1, 1)
     return tensor * std + mean
 
+labels = [ '5_o_Clock_Shadow ','Arched_Eyebrows ','Attractive ','Bags_Under_Eyes ','Bald ','Bangs ','Big_Lips ','Big_Nose ','Black_Hair ','Blond_Hair ','Blurry ','Brown_Hair ','Bushy_Eyebrows ','Chubby ','Double_Chin ','Eyeglasses ','Goatee ','Gray_Hair ','Heavy_Makeup ','High_Cheekbones ','Male ','Mouth_Slightly_Open ','Mustache ','Narrow_Eyes ','No_Beard ','Oval_Face ','Pale_Skin ','Pointy_Nose ','Receding_Hairline ','Rosy_Cheeks ','Sideburns ','Smiling ','Straight_Hair ','Wavy_Hair ','Wearing_Earrings ','Wearing_Hat ','Wearing_Lipstick ','Wearing_Necklace ','Wearing_Necktie ','Young ']
+
+def sparse_random_labels(num_attrs=40, num_active=1):
+    # Choose `num_active` indices to be 1
+    idx = torch.randperm(num_attrs)[:num_active]
+    label = torch.full((num_attrs,), -1, dtype=torch.int)
+    label[idx] = 1
+    return label
+
 def test(vae, flow=None, x0=None):
     if x0 is not None:
         x0 = x0.view(1, 3, dim_size, dim_size)
@@ -30,7 +39,9 @@ def test(vae, flow=None, x0=None):
         mu, logvar = vae.encode(x0)
         z = vae.reparameterize(mu, logvar)
     else:
-        z = torch.randn(1, 16, 16, 16).to(device)
+        # z = torch.randn(1, 16, 16, 16).to(device)
+        z = torch.randn(1, 64).to(device)
+
 
 
     x_hat = vae.decode(z)
@@ -38,11 +49,16 @@ def test(vae, flow=None, x0=None):
     save_image(img, 'output1.png')
 
     if flow:
-        z = flow.transform(z)
+        rand_labels = sparse_random_labels()
+        rand_labels = rand_labels.to(device).float().unsqueeze(0)
+        z = flow.transform(z, rand_labels)
         x_hat = vae.decode(z)
 
         img = unnormalize(x_hat.cpu())
         save_image(img, 'output2.png')
+        active_attrs = [i for i in range(len(labels)) if rand_labels[0, i] == 1]
+        for i in active_attrs:
+            print(labels[i], end=', ')
 
 
 if __name__ == '__main__':

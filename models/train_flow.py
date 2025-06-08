@@ -3,8 +3,8 @@ from models.flow import Flow
 from models import device
 
 def train(dataloader, vae, num_epochs=100, patience=5):
-    flow_model = Flow(vae.latent_dim).to(device)
-    flow = torch.compile(flow_model)
+    flow_model = Flow().to(device)
+    flow = torch.compile(flow_model, mode="max-autotune")
     optimizer = torch.optim.Adam(params=flow_model.parameters(), lr=1e-4)
 
     num_batches = len(dataloader)
@@ -15,8 +15,9 @@ def train(dataloader, vae, num_epochs=100, patience=5):
         print(f'Epoch {i+1}/{num_epochs}')
         epoch_loss = 0.0
 
-        for images, _ in dataloader:
+        for images, labels in dataloader:
             x = images.to(device)
+            y = labels.to(device).float()
             B = x.size(0)
 
             optimizer.zero_grad()
@@ -27,9 +28,9 @@ def train(dataloader, vae, num_epochs=100, patience=5):
                 z0 = torch.randn_like(z, device=device)
 
 
-            t = torch.rand(B, device=device).view(B, 1, 1, 1)
+            t = torch.rand(B, device=device).unsqueeze(-1)
             z_interpolated = (1-t)*z0 + (t*z)
-            v_hat = flow(z_interpolated, t)
+            v_hat = flow(z_interpolated, t, y)
             v = z - z0
 
             loss = torch.mean((v - v_hat)**2)
