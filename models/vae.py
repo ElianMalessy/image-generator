@@ -2,38 +2,45 @@ import torch
 import torch.nn as nn
 
 class VAE(nn.Module):
-    def __init__(self, latent_dim=64):
+    def __init__(self, latent_dim=(4, 16, 16)):
         super().__init__()
         self.encoder = nn.Sequential(
-            nn.Conv2d(3, 64, 4, 2, 1),
+            nn.Conv2d(3, 64, 3, 2, 1, bias=False),
             nn.BatchNorm2d(64),
             nn.SiLU(),
-            nn.Conv2d(64, 128, 4, 2, 1),
+            nn.Conv2d(64, 128, 3, 2, 1, bias=False),
             nn.BatchNorm2d(128),
             nn.SiLU(),
-            nn.Conv2d(128, 256, 4, 2, 1),
-            nn.BatchNorm2d(256),
-            nn.SiLU(),
-            nn.Conv2d(256, 512, 4, 2, 1),
-            nn.BatchNorm2d(512),
-            nn.SiLU(),
-            nn.Flatten()
         )
 
-        self.mu = nn.Linear(512 * 4 * 4, latent_dim)
-        self.log_var = nn.Linear(512 * 4 * 4, latent_dim)
+        C, _, _ = latent_dim
+        self.mu = nn.Conv2d(128, C, kernel_size=1)
+        self.log_var = nn.Conv2d(128, C, kernel_size=1)
+
+        def conv_block(in_channels, out_channels):
+            return nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, 3, padding=1),
+                nn.GroupNorm(8, out_channels),
+                nn.SiLU(),
+                nn.Conv2d(out_channels, out_channels, 3, padding=1),
+                nn.GroupNorm(8, out_channels),
+                nn.SiLU(),
+            )
+            
 
         self.decoder = nn.Sequential(
-            nn.Linear(latent_dim, 512 * 4 * 4),
-            nn.Unflatten(1, (512, 4, 4)),
-            nn.ConvTranspose2d(512, 256, 4, 2, 1),
+            nn.Conv2d(C, 128, kernel_size=1),
             nn.SiLU(),
-            nn.ConvTranspose2d(256, 128, 4, 2, 1),
-            nn.SiLU(),
-            nn.ConvTranspose2d(128, 64, 4, 2, 1),
-            nn.SiLU(),
-            nn.ConvTranspose2d(64, 3, 4, 2, 1),
-            nn.Tanh(),  # Keep output in [-1,1]
+
+            conv_block(128, 128),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+
+            conv_block(128, 64),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+
+            conv_block(64, 32),
+            nn.Conv2d(32, 3, 3, padding=1),
+            nn.Tanh(),
         )
 
     def encode(self, x):

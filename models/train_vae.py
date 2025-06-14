@@ -34,10 +34,11 @@ def train(dataloader, num_epochs=100, patience=5):
 
             with torch.autocast(device_type='cuda', dtype=torch.float16):
                 x_hat, mu, log_var = vae(x_noisy)
-                reconstruction_loss = torch.sum((x - x_hat)**2, dim=[1,2,3]).mean()
-                kl_div = torch.sum(0.5 * (mu.pow(2) + torch.exp(log_var) - log_var - 1), dim=1).mean()
 
-                ELBO = reconstruction_loss + kl_div
+            reconstruction_loss = torch.sum((x - x_hat)**2, dim=[1,2,3]).mean()
+            kl_div = torch.sum(0.5 * (mu.pow(2) + torch.exp(log_var) - log_var - 1), dim=1).mean()
+
+            ELBO = reconstruction_loss + kl_div
 
             scaler.scale(ELBO).backward()
             scaler.step(optimizer)

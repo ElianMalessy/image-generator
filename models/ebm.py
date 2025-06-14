@@ -25,11 +25,9 @@ def langevin_dynamics(x_init, ebm, num_steps=30, step_size=0.03, noise_scale=0.0
     for _ in range(num_steps):
         x.requires_grad_(True)
 
-        # energy and gradient
         energy = ebm(x).sum()
         grad = torch.autograd.grad(energy, x)[0]
 
-        # do the update without tracking history
         with torch.no_grad():
             noise = torch.randn_like(x) * noise_scale
             x = x - 0.5 * step_size * grad + noise

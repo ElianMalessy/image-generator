@@ -8,33 +8,19 @@ class FiLM(nn.Module):
         super().__init__()
         self.gamma = nn.Linear(label_dim, feature_dim)
         self.beta  = nn.Linear(label_dim, feature_dim)
-    def forward(self, h, y_embed):
-        # h: (B, feature_dim), y_embed: (B, label_dim)
-        g = self.gamma(y_embed)
-        b = self.beta (y_embed)
+    def forward(self, h, y):
+        g = self.gamma(y)
+        b = self.beta (y)
         return g * h + b
 
 class Flow(nn.Module):
-    def __init__(self, dim=64, time_dim=16, label_dim=32, n_heads=4):
+    def __init__(self, dim=64, time_dim=16, label_dim=40):
         super().__init__()
-        self.dim       = dim
-        self.time_dim  = time_dim
-        self.label_dim = label_dim
+        self.dim = dim
+        self.time_dim = time_dim
 
-        # → dim so cross-attn and FiLM both work in the same space
-        self.label_proj = nn.Sequential(
-            nn.Linear(40, label_dim),
-            nn.ReLU(),
-            nn.Linear(label_dim, dim),
-        )
-
-        # attention layers
-        self.cross_attn1 = nn.MultiheadAttention(embed_dim=dim, num_heads=n_heads, batch_first=True)
-        self.cross_attn2 = nn.MultiheadAttention(embed_dim=dim, num_heads=n_heads, batch_first=True)
-
-        # FiLM layers
-        self.film1 = FiLM(dim, dim)
-        self.film2 = FiLM(dim, dim)
+        self.film1 = FiLM(dim, label_dim)
+        self.film2 = FiLM(dim, label_dim)
 
         def make_block(in_dim, out_dim):
             return nn.Sequential(
@@ -50,40 +36,21 @@ class Flow(nn.Module):
         self.out = nn.Linear(dim, dim)
 
     def forward(self, x: torch.Tensor, t: torch.Tensor, y: torch.Tensor):
-        B = x.size(0)
-
-        # 1) time features
-        t_feats = fourier_features(t, self.time_dim)   # (B, time_dim)
-        h = torch.cat([x, t_feats], dim=-1)            # (B, dim+time_dim)
+        t_feats = fourier_features(t, self.time_dim)
+        h = torch.cat([x, t_feats], dim=-1)
         h = self.block1(h)
 
-        # 2) project labels once
-        y_embed = self.label_proj(y)                   # (B, dim)
+        h = self.film1(h, y)
 
-        # ── First Attention + FiLM ───────────────────────────
-        # stack into length-2 sequence
-        seq = torch.stack([h, y_embed], dim=1)         # (B, 2, dim)
-        attn_out, _ = self.cross_attn1(seq, seq, seq)  # (B, 2, dim)
-        h = attn_out[:,0]                              # (B, dim)
-        # FiLM conditioning
-        h = self.film1(h, y_embed)
-
-        # ── First Residual Block ────────────────────────────
         res = self.block2(h)
         h = h + res
 
-        # ── Second Attention + FiLM ──────────────────────────
-        seq = torch.stack([h, y_embed], dim=1)
-        attn_out, _ = self.cross_attn2(seq, seq, seq)
-        h = attn_out[:,0]
-        h = self.film2(h, y_embed)
+        h = self.film2(h, y)
 
-        # ── Second Residual Block ────────────────────────────
         res = self.block3(h)
         h = h + res
 
-        # ── Final projection ─────────────────────────────────
-        v_hat = self.out(h)                             # (B, dim)
+        v_hat = self.out(h)
 
         return v_hat
 
@@ -93,7 +60,6 @@ class Flow(nn.Module):
         def dxdt(ti, xi) -> torch.Tensor:
             ti = ti.unsqueeze(-1)
             v = self.forward(xi, ti, y)
-            # alpha = (1 - ti).pow(2)
             return v
 
         t = torch.linspace(0, 1, steps=steps).to(device)
